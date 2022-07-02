@@ -55,7 +55,6 @@ int main(int argc, char **argv)
           break;
         case 'N':
           count = atoi(argv[++i]);
-	  printf("count %d\n", count);
 	  chans = malloc(count*sizeof(int));
 	  keys = malloc(count*sizeof(int));
 	  vels = malloc(count*sizeof(int));
@@ -131,7 +130,6 @@ int main(int argc, char **argv)
   for (int i = 0; i < count; i++) {
     //Write note on output file
     fluid_synth_noteon(synth, chans[i], keys[i], vels[i]);
-    printf("nota %d\n", keys[i]);
   }
   //TODO: handle possible noteoff after timer intervals
     sleep(3);
