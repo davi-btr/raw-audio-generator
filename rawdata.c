@@ -3,7 +3,7 @@
  *
  * Author:	Davide Bettarini
  * Date:	02/07/2022
- * License:	
+ * License:	GPL
  *
 */
 
@@ -12,6 +12,13 @@
 #include <unistd.h>
 #include <fluidsynth.h>
 
+//#define DEBUG
+
+#ifdef DEBUG
+#define dbg_printf printf
+#else
+#define dbg_printf(args...)
+#endif
 
 static void usage(void)
 {
@@ -24,7 +31,7 @@ static void usage(void)
   fprintf(stderr, "    -b size		: buffer period size\n");
   fprintf(stderr, "    -r rate		: stream samplerate\n");
   fprintf(stderr, "    -g gain		: audio synthesizer gain\n");
-  fprintf(stderr, "    -N data		: [total number of notes K] [note 1] [note 2] ... [note K]\nEvery argument 'note' is composed of [channel MIDI-key MIDI-velocity]\n");
+  fprintf(stderr, "    -N data		: data is composed of: [total number of MIDI events K] [MIDI event #1] [delay #1] [MIDI event #2] ... [MIDI event 2*K + 1]\nEvery argument 'MIDI event' can match a 'note on MIDI event' or a 'note off MIDI event'\nA single 'MIDI event' is composed of [MIDI-channel MIDI-key MIDI-velocity]\nMIDI-velocity=0 matches a 'note off MIDI event, otherwise it represents a 'note on MIDI event''\nDelays are only measured in seconds. A null value implies no delay between contiguous events\n");
   fprintf(stderr, "  example:\n");
   fprintf(stderr, "    rawdata -S /usr/share/sounds/sf2/FluidR3_GM.sf2 -r 48000.0 -b 1024 -f float -N 2 0 64 127 0 75 127\n");
   fprintf(stderr, "    \n");
@@ -37,13 +44,13 @@ int main(int argc, char **argv)
   char *sfname = NULL, fname[18] = "noteXXX-YYY-N.dat", *sformat = "16bits", *fformat = "s16";
   int bsize = 64, count = 0;
   float rate = 44100.0, gain = 5.0;
-  int *chans, *keys, *vels;	//to store info required to play MIDI notes
+  int *chans, *keys, *vels, *delays;	//to store info required to play MIDI notes
 
   if (argc <= 1) {
     usage();
     exit(0);
   }
-    
+ 
   for (int i = 1 ; i < argc - 1; i++) {
     if (argv[i][0]=='-') {
       switch (argv[i][1]) {
@@ -55,11 +62,13 @@ int main(int argc, char **argv)
           break;
         case 'N':
           count = atoi(argv[++i]);
-	  chans = malloc(count*sizeof(int));
-	  keys = malloc(count*sizeof(int));
-	  vels = malloc(count*sizeof(int));
-	  if (!chans || !keys || !vels) {
-            fprintf(stderr, "not enough memory\n");
+	  dbg_printf("count %d\n", count);
+	  chans = malloc(count * sizeof(int));
+	  keys = malloc(count * sizeof(int));
+	  vels = malloc(count * sizeof(int));
+	  delays = malloc(count * sizeof(int));
+	  if (!chans || !keys || !vels || !delays) {
+            fprintf(stderr, "memory allocation problems\n");
 
             exit(1);
 	  }
@@ -67,6 +76,12 @@ int main(int argc, char **argv)
             chans[j] = atoi(argv[++i]);
             keys[j] = atoi(argv[++i]);
             vels[j] = atoi(argv[++i]);
+	    dbg_printf("chann %d key %d vel %d\n", chans[j], keys[j], vels[j]);
+	    if (j == count - 1)
+		    delays[j] = 0;
+	    else
+		    delays[j] = atoi(argv[++i]);
+	    dbg_printf("pause %d\n", delays[j]);
 	  }
           break;
         case 'f':
@@ -96,6 +111,7 @@ int main(int argc, char **argv)
   fluid_audio_driver_t *adriver;
   int sfont_id;
 
+  //Handle output file name: note-KEY-VEL-N.dat
   fname[4] = (char)(keys[0] / 100 + 0x30);
   fname[5] = (char)((keys[0]%100) / 10 + 0x30);
   fname[6] = (char)(keys[0] % 10 + 0x30);
@@ -104,7 +120,7 @@ int main(int argc, char **argv)
   fname[10] = (char)(vels[0] % 10 + 0x30);
   fname[12] = (char)(count % 10 + 0x30);
 
-  //Create and change the settings
+  //Settings
   settings = new_fluid_settings();
   fluid_settings_setstr(settings, "audio.driver", "file");
   fluid_settings_setstr(settings, "audio.file.format", fformat);
@@ -114,11 +130,12 @@ int main(int argc, char **argv)
   fluid_settings_setstr(settings, "audio.sample-format", sformat);
   fluid_settings_setnum(settings, "synth.gain", gain);
   fluid_settings_setnum(settings, "synth.sample-rate", rate);
-  //Create the synthesizer
+  dbg_printf("settings done\n");
+
   synth = new_fluid_synth(settings);
-  //Create the audio driver (starts the synthesizer)
+
   adriver = new_fluid_audio_driver(settings, synth);
-  //Load a SoundFont and reset presets
+
   sfont_id = fluid_synth_sfload(synth, sfname, 1);
   if(sfont_id == FLUID_FAILED)
   {
@@ -127,15 +144,20 @@ int main(int argc, char **argv)
       goto err;
   }
 
+  dbg_printf("start\n");
   for (int i = 0; i < count; i++) {
-    //Write note on output file
-    fluid_synth_noteon(synth, chans[i], keys[i], vels[i]);
+    //send MIDI event to synthesiser
+    if (vels[i] == 0)
+      fluid_synth_noteoff(synth, chans[i], keys[i]);
+    else {
+      fluid_synth_noteon(synth, chans[i], keys[i], vels[i]);
+      dbg_printf("nota %d\n", keys[i]);
+    }
+    if (delays[i] > 0)
+      sleep(delays[i]);
   }
-  //TODO: handle possible noteoff after timer intervals
-    sleep(3);
-    //fluid_synth_noteoff(synth, chans[i], keys[i], vels[i]);
 err:
-  //Clean up
+ 
   delete_fluid_audio_driver(adriver);
   delete_fluid_synth(synth);
   delete_fluid_settings(settings);
