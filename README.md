@@ -1,5 +1,5 @@
 # raw-audio-generator
-Code to generate a rawdata file containing the audio samples of a note (or group of notes played simultaneously).
+Code to generate a rawdata file containing the audio samples of a note or group of notes played simultaneously or sequencially.
 
 Notes are described by their "key" and "velocity" according to the MIDI protocol.
 The program relies on the Fluidsynth API and uses soundfonts to synthesize the notes.
