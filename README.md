@@ -14,4 +14,4 @@ In case Fluidsynth is not already installed on the machine it can be fixed with:
 
 > sudo apt-get install fluidsynth
 
-The Example directory contains example code to generate multiple notes automatically (using a simple Linux shell script) and to verify their correctness by playing them back (using ALSA sound library).
+The Example directory contains example code to generate multiple notes automatically (using a simple Linux shell script) and to verify their correctness by playing them back (using ALSA sound library basic examples).
