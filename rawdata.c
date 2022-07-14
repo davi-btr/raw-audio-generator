@@ -46,9 +46,10 @@ int main(int argc, char **argv)
   float rate = 44100.0, gain = 5.0;
   int *chans, *keys, *vels, *delays;	//to store info required to play MIDI notes
 
-  if (argc <= 1) {
-    usage();
-    exit(0);
+  if (argc <= 1 | argv[1][1]== 'h')
+    {
+      usage();
+      return 0;
   }
  
   for (int i = 1 ; i < argc - 1; i++) {
@@ -56,6 +57,7 @@ int main(int argc, char **argv)
       switch (argv[i][1]) {
         case 'h':
           usage();
+          exit(0);
           break;
         case 'S':
           sfname = argv[++i];
